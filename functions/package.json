@@ -9,14 +9,17 @@
     "logs": "firebase functions:log"
   },
   "dependencies": {
+    "@types/firebase": "^2.4.32",
     "@types/underscore": "^1.8.5",
-    "firebase-admin": "~5.4.2",
+    "firebase-admin": "~5.5.0",
     "firebase-functions": "^0.7.3",
-    "typescript": "^2.6.1"
+    "typescript": "^2.6.1",
+    "underscore": "^1.8.3"
   },
   "private": true,
   "devDependencies": {
     "ts-loader": "^3.1.1",
+    "webpack": "^3.10.0",
     "webpack-node-externals": "^1.6.0"
   }
 }
