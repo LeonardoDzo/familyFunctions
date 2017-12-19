@@ -60,7 +60,7 @@
 /******/ 	__webpack_require__.p = "";
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 2);
+/******/ 	return __webpack_require__(__webpack_require__.s = 3);
 /******/ })
 /************************************************************************/
 /******/ ([
@@ -77,6 +77,12 @@ module.exports = require("firebase-admin");
 
 /***/ }),
 /* 2 */
+/***/ (function(module, exports) {
+
+module.exports = require("underscore");
+
+/***/ }),
+/* 3 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -88,13 +94,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const functions = __webpack_require__(0);
 const admin = __webpack_require__(1);
 admin.initializeApp(functions.config().firebase);
-__export(__webpack_require__(3));
+__export(__webpack_require__(4));
 __export(__webpack_require__(6));
 __export(__webpack_require__(7));
 
 
 /***/ }),
-/* 3 */
+/* 4 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -110,8 +116,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 const functions = __webpack_require__(0);
 const admin = __webpack_require__(1);
-const util_1 = __webpack_require__(4);
-const _ = __webpack_require__(5);
+const util_1 = __webpack_require__(5);
+const _ = __webpack_require__(2);
 exports.listener = functions.database.ref('families/{id}/').onCreate((event) => __awaiter(this, void 0, void 0, function* () {
     let fam = event.data.val();
     let id = event.params.id;
@@ -208,7 +214,6 @@ function onMemberRemoved(famId, currentMembers, members) {
                                                                 user: userId
                                                             }
                                                         };
-                                                        console.log("==Payload==: ", payload);
                                                         admin.messaging().sendToDevice(token, payload).then(response => {
                                                             console.log("======  success notifier =====");
                                                             console.log(response);
@@ -258,6 +263,10 @@ function onMemberAdded(famId, currentMembers, members) {
                                         user: userId
                                     }
                                 };
+                                let ref = admin.database().ref("/notifications").push(Object.assign({}, payload, { user: userId }));
+                                if (ref != null) {
+                                    admin.database().ref(`/users/notifications/${ref}`).set(false);
+                                }
                                 admin.messaging().sendToDevice(token, payload).then(response => {
                                     console.log("======  success notifier =====");
                                     console.log(response);
@@ -285,7 +294,10 @@ function onMemberAdded(famId, currentMembers, members) {
                                                 user: userId
                                             }
                                         };
-                                        console.log("==Payload==: ", payload);
+                                        let ref = admin.database().ref("/notifications").push(Object.assign({}, payload, { user: userId }));
+                                        if (ref != null) {
+                                            admin.database().ref(`/users/notifications/${ref}`).set(false);
+                                        }
                                         admin.messaging().sendToDevice(token, payload).then(response => {
                                             console.log("======  success notifier =====");
                                             console.log(response);
@@ -310,16 +322,10 @@ function onMemberAdded(famId, currentMembers, members) {
 
 
 /***/ }),
-/* 4 */
-/***/ (function(module, exports) {
-
-module.exports = require("util");
-
-/***/ }),
 /* 5 */
 /***/ (function(module, exports) {
 
-module.exports = require("underscore");
+module.exports = require("util");
 
 /***/ }),
 /* 6 */
@@ -338,19 +344,131 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 const functions = __webpack_require__(0);
 const admin = __webpack_require__(1);
+const _ = __webpack_require__(2);
 exports.onAddMemberEvent = functions.database.ref("/events/{id}/members/{idMember}").onCreate((memberSnap) => __awaiter(this, void 0, void 0, function* () {
     let id = memberSnap.params.id;
     let idMember = memberSnap.params.idMember;
-    yield admin.database().ref(`/events/${id}/members/${idMember}`).once("value", (snap) => __awaiter(this, void 0, void 0, function* () {
-        let member = snap.val();
-        yield admin.database().ref(`/users/${member.id}/events/${id}`).set(true);
-    }));
+    yield admin.database().ref(`/users/${idMember}/events/${id}`).set(true);
+    yield sendNotificationAddEvent(id, idMember);
 }));
 exports.onRemoveMemberEvent = functions.database.ref("/events/{id}/members/{idMember}").onDelete((memberSnap) => __awaiter(this, void 0, void 0, function* () {
     let id = memberSnap.params.id;
     let idMember = memberSnap.params.idMember;
     yield admin.database().ref(`/users/${idMember}/events/${id}`).remove();
+    yield sendNotificationRemoveEvent(id, idMember, null);
 }));
+exports.onRemoveEvent = functions.database.ref("/events/{id}").onDelete((eventSnap) => __awaiter(this, void 0, void 0, function* () {
+    let id = eventSnap.params.id;
+    let event = eventSnap.data.val();
+    if (event.hasOwnProperty("admins")) {
+        yield _.each(Object.keys(event.admins), (adminKey) => __awaiter(this, void 0, void 0, function* () {
+            yield admin.database().ref(`/users/${adminKey}/events/${id}`).remove();
+            yield sendNotificationRemoveEvent(id, adminKey, event);
+        }));
+    }
+    if (event.hasOwnProperty("members")) {
+        yield _.each(Object.keys(event.members), (user) => __awaiter(this, void 0, void 0, function* () {
+            yield admin.database().ref(`/users/${user}/events/${id}`).remove();
+            yield sendNotificationRemoveEvent(id, user, event);
+        }));
+    }
+}));
+function sendNotificationAddEvent(eventId, userAdded) {
+    return __awaiter(this, void 0, void 0, function* () {
+        yield admin.database().ref(`/users/${userAdded}`).once("value", (userSnap) => __awaiter(this, void 0, void 0, function* () {
+            let user = userSnap.val();
+            yield admin.database().ref(`/events/${eventId}`).once("value", (eventSnap) => __awaiter(this, void 0, void 0, function* () {
+                let event = eventSnap.val();
+                let payload = {
+                    notification: {
+                        title: `Nuevo Evento:`,
+                        body: `Se te agregó al evento: ${event.title || "Nuevo Evento"}`
+                    },
+                    data: {
+                        event: eventId,
+                        user: userAdded
+                    }
+                };
+                let ref = yield admin.database().ref("notifications").push();
+                yield ref.set(Object.assign({}, payload, { user: userAdded }));
+                if (ref != null) {
+                    admin.database().ref(`/users/${userAdded}/notifications/${ref.key}`).set(false);
+                }
+                if (user.hasOwnProperty("tokens")) {
+                    _.each(Object.keys(user.tokens), (token) => __awaiter(this, void 0, void 0, function* () {
+                        yield admin.messaging().sendToDevice(token, payload).then(success => {
+                            console.log("notifier-success: \n", success);
+                        }).catch(error => {
+                            console.log("notifier-error: \n", error);
+                        });
+                    }));
+                }
+            }));
+        }));
+    });
+}
+function sendNotificationRemoveEvent(eventId, userAdded, eventData) {
+    return __awaiter(this, void 0, void 0, function* () {
+        yield admin.database().ref(`/users/${userAdded}`).once("value", (userSnap) => __awaiter(this, void 0, void 0, function* () {
+            let user = userSnap.val();
+            yield admin.database().ref(`/events/${eventId}`).once("value", (eventSnap) => __awaiter(this, void 0, void 0, function* () {
+                let event = eventSnap.val();
+                if (eventSnap != null) {
+                    let payload = {
+                        notification: {
+                            title: `Aviso de evento:`,
+                            body: `Se te eliminó del evento: ${event.title || "Nuevo Evento"}`
+                        },
+                        data: {
+                            event_remove: eventId,
+                            user: userAdded
+                        }
+                    };
+                    let ref = yield admin.database().ref("notifications").push();
+                    yield ref.set(Object.assign({}, payload, { user: userAdded }));
+                    if (ref != null) {
+                        admin.database().ref(`/users/${userAdded}/notifications/${ref.key}`).set(false);
+                    }
+                    if (user.hasOwnProperty("tokens")) {
+                        _.each(Object.keys(user.tokens), (token) => __awaiter(this, void 0, void 0, function* () {
+                            yield admin.messaging().sendToDevice(token, payload).then(success => {
+                                console.log("notifier-success: \n", success);
+                            }).catch(error => {
+                                console.log("notifier-error: \n", error);
+                            });
+                        }));
+                    }
+                }
+                else {
+                    let payload = {
+                        notification: {
+                            title: `Aviso de evento:`,
+                            body: `Se te eliminó del evento: ${eventData.title || "Nuevo Evento"}`
+                        },
+                        data: {
+                            event_remove: eventId,
+                            user: userAdded
+                        }
+                    };
+                    let ref = yield admin.database().ref("notifications").push();
+                    yield ref.set(Object.assign({}, payload, { user: userAdded }));
+                    if (ref != null) {
+                        admin.database().ref(`/users/${userAdded}/notifications/${ref.key}`).set(false);
+                    }
+                    if (user.hasOwnProperty("tokens")) {
+                        _.each(Object.keys(user.tokens), (token) => __awaiter(this, void 0, void 0, function* () {
+                            yield admin.messaging().sendToDevice(token, payload).then(success => {
+                                console.log("notifier-success: \n", success);
+                            }).catch(error => {
+                                console.log("notifier-error: \n", error);
+                            });
+                        }));
+                    }
+                }
+            }));
+        }));
+    });
+}
 
 
 /***/ }),
@@ -370,14 +488,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 const functions = __webpack_require__(0);
 const admin = __webpack_require__(1);
+const _ = __webpack_require__(2);
 exports.OnCreateChat = functions.database.ref("/groups/{id}").onCreate((group) => __awaiter(this, void 0, void 0, function* () {
     let id = group.params.id;
-    yield admin.database().ref(`groups/${id}`).once("value", (data) => __awaiter(this, void 0, void 0, function* () {
-        let gData = data.val();
-        if (gData.hasOwnProperty("familyId")) {
-            yield admin.database().ref(`/families/${gData.familyId}/groups/${id}`).set(true);
-        }
-    }));
+    let gData = group.data.val();
+    if (gData.hasOwnProperty("familyId")) {
+        yield admin.database().ref(`/families/${gData.familyId}/groups/${id}`).set(true);
+    }
 }));
 exports.OnDeleteChat = functions.database.ref("/groups/{id}").onDelete((group) => __awaiter(this, void 0, void 0, function* () {
     let id = group.params.id;
@@ -389,8 +506,124 @@ exports.OnDeleteChat = functions.database.ref("/groups/{id}").onDelete((group) =
 exports.OnCreateMessage = functions.database.ref("/messages/{id}").onCreate((data) => __awaiter(this, void 0, void 0, function* () {
     let id = data.params.id;
     let message = data.data.val();
-    yield admin.database().ref(`/groups/${message.groupId}/messages/${id}`).set(true);
+    yield admin.database().ref(`/groups/${message.groupId}/messages/${id}`).set(Date.now());
     yield admin.database().ref(`/groups/${message.groupId}/lastMessage`).set(id);
+    yield admin.database().ref(`/users/${message.remittent}`).once("value", (remittentSnap) => __awaiter(this, void 0, void 0, function* () {
+        let remittent = remittentSnap.val();
+        yield admin.database().ref(`/groups/${message.groupId}`).once("value", (groupSnap) => __awaiter(this, void 0, void 0, function* () {
+            let group = groupSnap.val();
+            if (group.isGroup == true) {
+                let members = Object.keys(group.members);
+                yield _.each(members, (idUser) => __awaiter(this, void 0, void 0, function* () {
+                    yield admin.database().ref(`/users/${idUser}`).once("value", userSnap => {
+                        let user = userSnap.val();
+                        let payload = {
+                            notification: {
+                                title: `Nuevo Mensaje en ${group.title}:`,
+                                body: `${remittent.name}: ${message.text}`
+                            },
+                            data: {
+                                group: message.groupId,
+                                remittent: message.remittent
+                            }
+                        };
+                        if (user.hasOwnProperty("tokens")) {
+                            let tokens = Object.keys(user.tokens);
+                            tokens.forEach(item => admin.messaging().sendToDevice(item, payload)
+                                .then(success => console.log(success))
+                                .catch(error => console.log(error)));
+                        }
+                    });
+                }));
+            }
+            else {
+                let members = Object.keys(group.members).filter(item => item != message.remittent);
+                yield _.each(members, (idUser) => __awaiter(this, void 0, void 0, function* () {
+                    yield admin.database().ref(`/users/${idUser}`).once("value", userSnap => {
+                        let user = userSnap.val();
+                        let payload = {
+                            notification: {
+                                title: `Nuevo Mensaje:`,
+                                body: `${remittent.name}: ${message.text}`
+                            },
+                            data: {
+                                group: message.groupId,
+                                remittent: message.remittent
+                            }
+                        };
+                        if (user.hasOwnProperty("tokens")) {
+                            let tokens = Object.keys(user.tokens);
+                            tokens.forEach(item => admin.messaging().sendToDevice(item, payload)
+                                .then(success => console.log(success))
+                                .catch(error => console.log(error)));
+                        }
+                    });
+                }));
+            }
+        }));
+    }));
+}));
+exports.onRemoveMemberChat = functions.database.ref("/groups/{idGroup}/members/{idMember}").onDelete((snap) => __awaiter(this, void 0, void 0, function* () {
+    let idMember = snap.params.idMember;
+    let idGroup = snap.params.idGroup;
+    yield admin.database().ref(`/groups/${idGroup}`).once("value", (groupSnap) => __awaiter(this, void 0, void 0, function* () {
+        let group = groupSnap.val();
+        yield admin.database().ref(`/users/${idMember}`).once("value", (userSnap) => __awaiter(this, void 0, void 0, function* () {
+            let user = userSnap.val();
+            let payload = {
+                notification: {
+                    title: "Se te eliminó de un chat.",
+                    body: `Has sido eliminado del grupo ${group.title}`
+                },
+                data: {
+                    user: idMember,
+                    group: idGroup
+                }
+            };
+            if (user.hasOwnProperty("tokens")) {
+                let tokens = Object.keys(user.tokens);
+                yield _.each(tokens, token => {
+                    admin.messaging().sendToDevice(token, payload).then(success => {
+                        console.log("Success Notifier: ", payload);
+                    }).catch(error => {
+                        console.log("========== error notifier=========== \n", error);
+                    });
+                });
+            }
+        }));
+    }));
+}));
+exports.onAddMemberChat = functions.database.ref("/groups/{idGroup}/members/{idMember}").onCreate((snap) => __awaiter(this, void 0, void 0, function* () {
+    let idMember = snap.params.idMember;
+    let idGroup = snap.params.idGroup;
+    yield admin.database().ref(`/groups/${idGroup}`).once("value", (groupSnap) => __awaiter(this, void 0, void 0, function* () {
+        let group = groupSnap.val();
+        if (group.isGroup == true) {
+            yield admin.database().ref(`/users/${idMember}`).once("value", (userSnap) => __awaiter(this, void 0, void 0, function* () {
+                let user = userSnap.val();
+                let payload = {
+                    notification: {
+                        title: "Has sido añadido a un chat.",
+                        body: `Has sido añadido al grupo ${group.title}`
+                    },
+                    data: {
+                        user: idMember,
+                        group: idGroup
+                    }
+                };
+                if (user.hasOwnProperty("tokens")) {
+                    let tokens = Object.keys(user.tokens);
+                    yield _.each(tokens, token => {
+                        admin.messaging().sendToDevice(token, payload).then(success => {
+                            console.log("Success Notifier: ", payload);
+                        }).catch(error => {
+                            console.log("========== error notifier=========== \n", error);
+                        });
+                    });
+                }
+            }));
+        }
+    }));
 }));
 
 

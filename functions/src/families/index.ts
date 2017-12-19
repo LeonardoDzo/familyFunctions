@@ -41,15 +41,15 @@ export const listener = functions.database.ref('families/{id}/').onCreate(async 
 
 export const ChangeFamilyPhoto = functions.database.ref("families/{id}/photoURL/{url}").onWrite(
     async data =>{
-        let id = data.params.id
-        let url = data.params.url
+        let id = data.params!.id
+        let url = data.params!.url
         await admin.database().ref(`/groups/${id}/coverPhoto`).set(url);
     });
 
 export const ChangeFamilyName = functions.database.ref("families/{id}/name/{name}").onWrite(
     async data =>{
-        let id = data.params.id;
-        let name = data.params.name;
+        let id = data.params!.id;
+        let name = data.params!.name;
         await admin.database().ref(`/groups/${id}/title`).set(name);
     });
 export const familyMembersChanged = functions.database.ref('/families/{id}/members')
@@ -120,7 +120,6 @@ async function onMemberRemoved(famId: string, currentMembers: string[], members:
                                                                 user: userId
                                                             }
                                                         }
-                                                        console.log("==Payload==: ",payload);
                                                         admin.messaging().sendToDevice(token,payload).then(response =>{
                                                             console.log("======  success notifier =====");
                                                             console.log(response)
@@ -169,6 +168,10 @@ async function onMemberAdded(famId: string, currentMembers: FamilyMembers, membe
                                         user: userId
                                     }
                                 }
+                                let ref =  admin.database().ref("/notifications").push({...payload,user: userId});
+                                if(ref != null){
+                                    admin.database().ref(`/users/notifications/${ref}`).set(false);
+                                }
                                 admin.messaging().sendToDevice(token,payload).then(response =>{
                                     console.log("======  success notifier =====");
                                     console.log(response)
@@ -196,7 +199,10 @@ async function onMemberAdded(famId: string, currentMembers: FamilyMembers, membe
                                                 user: userId
                                             }
                                         }
-                                        console.log("==Payload==: ",payload);
+                                        let ref =  admin.database().ref("/notifications").push({...payload,user: userId});
+                                        if(ref != null){
+                                            admin.database().ref(`/users/notifications/${ref}`).set(false);
+                                        }
                                         admin.messaging().sendToDevice(token,payload).then(response =>{
                                             console.log("======  success notifier =====");
                                             console.log(response)
