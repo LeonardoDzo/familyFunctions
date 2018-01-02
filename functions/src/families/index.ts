@@ -168,10 +168,6 @@ async function onMemberAdded(famId: string, currentMembers: FamilyMembers, membe
                                         user: userId
                                     }
                                 }
-                                let ref =  admin.database().ref("/notifications").push({...payload,user: userId});
-                                if(ref != null){
-                                    admin.database().ref(`/users/notifications/${ref}`).set(false);
-                                }
                                 admin.messaging().sendToDevice(token,payload).then(response =>{
                                     console.log("======  success notifier =====");
                                     console.log(response)
@@ -198,10 +194,6 @@ async function onMemberAdded(famId: string, currentMembers: FamilyMembers, membe
                                                 family: famId,
                                                 user: userId
                                             }
-                                        }
-                                        let ref =  admin.database().ref("/notifications").push({...payload,user: userId});
-                                        if(ref != null){
-                                            admin.database().ref(`/users/notifications/${ref}`).set(false);
                                         }
                                         admin.messaging().sendToDevice(token,payload).then(response =>{
                                             console.log("======  success notifier =====");

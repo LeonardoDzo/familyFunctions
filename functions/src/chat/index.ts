@@ -21,14 +21,15 @@ export const OnDeleteChat = functions.database.ref("/groups/{id}").onDelete(asyn
 export const OnCreateMessage = functions.database.ref("/messages/{id}").onCreate(async data=>{
     let id = data.params!.id;
     let message = data.data.val();
-    await admin.database().ref(`/groups/${message.groupId}/messages/${id}`).set(Date.now());
+    await admin.database().ref(`/groups/${message.groupId}/messages/${id}`).set(message.timestamp);
     await admin.database().ref(`/groups/${message.groupId}/lastMessage`).set(id);
+    await admin.database().ref(`/groups/${message.groupId}/members/${message.remittent}`).set(message.timestamp);
     await admin.database().ref(`/users/${message.remittent}`).once("value", async remittentSnap =>{
         let remittent = remittentSnap.val();
         await admin.database().ref(`/groups/${message.groupId}`).once("value", async groupSnap =>{
             let group = groupSnap.val();
             if(group.isGroup == true){
-                let members = Object.keys(group.members);
+                let members = Object.keys(group.members).filter(item => item != message.remittent);
                 await _.each(members, async idUser => {
                     await admin.database().ref(`/users/${idUser}`).once("value",userSnap =>{
                         let user = userSnap.val();
@@ -38,8 +39,8 @@ export const OnCreateMessage = functions.database.ref("/messages/{id}").onCreate
                                 body: `${remittent.name}: ${message.text}`
                             },
                             data: {
-                                group: message.groupId,
-                                remittent: message.remittent
+                                chat: message.groupId,
+                                familyId: group.familyId
                             }
                         }
                         if(user.hasOwnProperty("tokens")){
@@ -62,8 +63,8 @@ export const OnCreateMessage = functions.database.ref("/messages/{id}").onCreate
                                 body: `${remittent.name}: ${message.text}`
                             },
                             data: {
-                                group: message.groupId,
-                                remittent: message.remittent
+                                chat: message.groupId,
+                                familyId: group.familyId
                             }
                         }
                         if(user.hasOwnProperty("tokens")){
@@ -93,8 +94,8 @@ export const onRemoveMemberChat = functions.database.ref("/groups/{idGroup}/memb
                     body: `Has sido eliminado del grupo ${group.title}`
                 },
                 data: {
-                    user: idMember,
-                    group: idGroup
+                    chat: idGroup,
+                    familyId: group.familyId
                 }
             }
             if(user.hasOwnProperty("tokens")){
@@ -125,8 +126,8 @@ export const onAddMemberChat = functions.database.ref("/groups/{idGroup}/members
                         body: `Has sido añadido al grupo ${group.title}`
                     },
                     data: {
-                        user: idMember,
-                        group: idGroup
+                        chat: idGroup,
+                        familyId: group.familyId
                     }
                 }
                 if(user.hasOwnProperty("tokens")){
