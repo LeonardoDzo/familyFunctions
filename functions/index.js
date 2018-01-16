@@ -521,6 +521,7 @@ exports.OnCreateMessage = functions.database.ref("/messages/{id}").onCreate((dat
                                 body: `${remittent.name}: ${message.text}`
                             },
                             data: {
+                                type: '0',
                                 chat: message.groupId,
                                 familyId: group.familyId
                             }
@@ -622,6 +623,27 @@ exports.onAddMemberChat = functions.database.ref("/groups/{idGroup}/members/{idM
             }));
         }
     }));
+}));
+exports.onReadChat = functions.database.ref('/groups/{groupId}/members/{memberId}')
+    .onUpdate((snap) => __awaiter(this, void 0, void 0, function* () {
+    let memberId = snap.params.memberId;
+    let groupId = snap.params.groupId;
+    let timestamp = snap.data.val();
+    let reads = yield admin.database().ref(`/groups/${groupId}/members`).once('value');
+    let fartherRead = _.min(_.values(reads));
+    if (timestamp > fartherRead)
+        return; // aun hay mensajes sin leer
+    let messages = yield admin.database().ref('/messages')
+        .orderByChild("groupId")
+        .equalTo(groupId)
+        .once('value');
+    let ps = [];
+    _.mapObject(messages, (message, id) => {
+        console.log(id, message.timestamp);
+        if (message.timestamp < fartherRead)
+            ps.push(admin.database().ref('/messages/' + id).remove());
+    });
+    yield Promise.all(ps);
 }));
 
 
