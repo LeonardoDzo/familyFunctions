@@ -15,7 +15,7 @@ export const onAddMemberEvent = functions.database.ref("/events/{id}/members/{id
             },
             data: {
                 event: id,
-                timestamp: Date.now()
+                timestamp: Date.now() + ''
             }
         }
         await sendNotificationAddEvent(id,idMember,payload);

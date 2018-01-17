@@ -1,0 +1,5 @@
+.idea
+.vscode
+functions/node_modules
+functions/index.js
+firebase-debug.log
